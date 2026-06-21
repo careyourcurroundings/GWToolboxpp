@@ -54,3 +54,4 @@ macro(add_tb_plugin PLUGIN)
 endmacro()
 
 add_tb_plugin(ExamplePlugin)
+add_tb_plugin(PacketCsvLogger)
