@@ -43,10 +43,10 @@ namespace {
 
     // Degen condition colors - red, green, purple, orange
     static const uint32_t COND_COLORS[4] = {
-        0xFF3232C8,
+        0xFFC83232,
         0xFF50C878,
         0xFFC864C8,
-        0xFF0078FF
+        0xFFFF7800
     };
     const char* COND_ICON[4] = { ICON_FA_TINT, ICON_FA_TINT, ICON_FA_SKULL, ICON_FA_FIRE };
 
@@ -423,13 +423,12 @@ bool PartyDamagePlugin::CalcPartyPositions() {
 
 void PartyDamagePlugin::MapLoadedCB(GW::HookStatus*, const GW::Packet::StoC::MapLoaded*) {
     if (!g_instance) return;
-    switch (GW::Map::GetInstanceType()) {
-    case GW::Constants::InstanceType::Outpost:
-        g_instance->party_health_bars_pos = {}; g_instance->agent_health_bar_pos.clear();
-        cached_hb_frame = nullptr; cached_party_frame = nullptr; break;
-    case GW::Constants::InstanceType::Explorable: g_instance->ResetDamage(); break;
-    default: break;
-    }
+    // Always recalculate positions on zone change - cached frame pointers become invalid
+    g_instance->party_health_bars_pos = {};
+    g_instance->agent_health_bar_pos.clear();
+    cached_hb_frame = nullptr;
+    cached_party_frame = nullptr;
+    // Do NOT reset damage data - persist across zones until plugin restart or /dmg reset
 }
 
 void PartyDamagePlugin::DamagePacketCB(GW::HookStatus*, const GW::Packet::StoC::GenericModifier* pkt) {
@@ -696,39 +695,38 @@ void PartyDamagePlugin::Draw(IDirect3DDevice9*) {
             ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255,255,200,255));
             ImGui::Text("Party DPS: %d/s", party_total_dps + degen_dps);
             ImGui::PopStyleColor();
-            if (settings.show_condition_dps) {
-                ImGui::SameLine(); ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(180,180,180,255));
-                ImGui::Text("(%.1f%% from degen)", total_degen > 0 ? (degen_dps * 100.0 / (party_total_dps + degen_dps)) : 0.0);
-                ImGui::PopStyleColor();
-            }
         }
 
         if (settings.show_condition_dps) {
             auto calc_dps = [&](double d) { return ct == 0 ? 0 : (uint32_t)std::llround(d * 1000.0 / ct); };
-            // Line 1: condition icons with DPS
-            for (int ci = 0; ci < 4; ci++) {
+            // Line 1: Bleeding (red), Poison (green), Disease (purple)
+            for (int ci = 0; ci < 3; ci++) {
                 ImGui::PushStyleColor(ImGuiCol_Text, COND_COLORS[ci]);
-                if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s: %.0f total", ci==0?"Bleeding":ci==1?"Poison":ci==2?"Disease":"Burning", degen_info.total_cond_damage[ci]); }
                 ImGui::Text("%s", COND_ICON[ci]); ImGui::PopStyleColor();
+                if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s: %.0f total", ci==0?"Bleeding":ci==1?"Poison":"Disease", degen_info.total_cond_damage[ci]); }
                 ImGui::SameLine(); ImGui::Text("%d/s", calc_dps(degen_info.total_cond_damage[ci])); ImGui::SameLine();
             }
             ImGui::NewLine();
-            // Line 2: HEX and DW with DPS
+            // Line 2: Burning (orange), Hex (purple), Deep Wound (red droplet-slash)
+            ImGui::PushStyleColor(ImGuiCol_Text, COND_COLORS[3]);
+            ImGui::Text("%s", COND_ICON[3]); ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Burning: %.0f total", degen_info.total_cond_damage[3]); }
+            ImGui::SameLine(); ImGui::Text("%d/s", calc_dps(degen_info.total_cond_damage[3])); ImGui::SameLine();
             ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(150,100,255,255));
+            ImGui::Text(ICON_FA_BIOHAZARD); ImGui::PopStyleColor();
             if (ImGui::IsItemHovered()) {
                 ImGui::BeginTooltip(); ImGui::Text("Hex degen damage:"); ImGui::Separator();
-                for (uint32_t si = 0; si < degen_info.hex_count; si++)
-                    ImGui::Text("  Skill %d: %.0f total", degen_info.hex_skill_ids[si], degen_info.hex_damage_by_skill[si]);
+                for (uint32_t si = 0; si < degen_info.hex_count; si++) {
+                    ImGui::Text("  Skill %u: %.0f total", degen_info.hex_skill_ids[si], degen_info.hex_damage_by_skill[si]);
+                }
                 if (degen_info.hex_count == 0) ImGui::Text("  (none)");
                 ImGui::EndTooltip();
             }
-            ImGui::Text(ICON_FA_BIOHAZARD); ImGui::PopStyleColor();
             ImGui::SameLine(); ImGui::Text("%d/s", calc_dps(degen_info.total_hex_damage));
-            ImGui::SameLine(); ImGui::Text("  ");
             ImGui::SameLine();
             ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255,50,50,255));
+            ImGui::Text(ICON_FA_TINT_SLASH); ImGui::PopStyleColor();
             if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Deep Wound: %.0f total damage from death blows", degen_info.deep_wound_damage); }
-            ImGui::Text(ICON_FA_BOMB); ImGui::PopStyleColor();
             ImGui::SameLine(); ImGui::Text("%d/s", calc_dps(degen_info.deep_wound_damage));
         }
 

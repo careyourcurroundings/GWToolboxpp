@@ -38,7 +38,7 @@ public:
         uint32_t color_damage = IM_COL32(0, 0, 0, 76);
         uint32_t color_recent = IM_COL32(102, 153, 230, 205);
         uint32_t color_healing = IM_COL32(102, 230, 102, 205);
-        float width = 300.0f;
+        float width = 225.0f;
         bool bars_left = true;
         int recent_max_time = 7000;
         bool hide_in_outpost = false;
